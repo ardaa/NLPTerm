@@ -46,6 +46,36 @@ class Codenames:
         self.neutral = [word for word in words if word not in self.blue_team and word not in self.red_team and word not in self.assassin]
         
         self.board = [words[i:i+self.col] for i in range(0, len(words), self.col)]
+    
+    def create_dataset(self):
+        #create board, ask for hint, ask for number of words, ask for words, save to file, loop
+        self.generate_board()
+        self.print_board_colored()
+        with open("./data/codenames_dataset.txt", "a") as f:
+            f.write("________________________\n")
+            #write board to file
+            for row in self.board:
+                f.write(f"{row}\n")
+            f.write("________________________\n")
+
+        while self.winner == None:
+            hint = input("Enter a hint: ")
+            num = int(input("Enter a number: "))
+            words = []
+            for i in range(num):
+                word = input("Enter a word: ")
+                #check if word is on the board, ask again if not
+                while word.lower() not in [word.lower() for row in self.board for word in row]:
+                    print("Word not on board")
+                    word = input("Enter a word: ")
+                words.append(word)
+            with open("./data/codenames_dataset.txt", "a") as f:
+                f.write(f"{hint} {num} {words}\n")
+            self.turn = "blue" if self.turn == "red" else "red"
+            self.print_board_colored()
+            self.check_winner()
+        print(f"{self.winner} team wins!")
+
 
     def tune_model(self):
         print("Tuning model...")
@@ -280,7 +310,7 @@ class Codenames:
 if __name__ == "__main__":
     codenames = Codenames()
     #codenames.tune_model()
-    codenames.play()
+    codenames.create_dataset()
         
         
 
