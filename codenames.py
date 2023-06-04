@@ -9,11 +9,13 @@ import tqdm
 #gensim verbose
 import logging
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+from nltk.stem import WordNetLemmatizer
+from transformers import BertTokenizer, BertForNextSentencePrediction
+import torch
 
-    
 class Codenames:
-    def __init__(self, row=5, col=5):
-        self.model = gensim.models.KeyedVectors.load_word2vec_format('GoogleNews-vectors-negative300.bin', binary=True)
+    def __init__(self, model_name, row=5, col=5):
+        self.import_model(model_name)
         #model min_count=5, epochs=10, window=5, sg=1, workers=4
         
         #self.model = gensim.models.KeyedVectors.load('codenames.model')
@@ -33,13 +35,19 @@ class Codenames:
         self.red_score = 0
         self.turn = "blue"
         self.winner = None
+        self.lemmatizer = WordNetLemmatizer()
+
     def readfile(self):
         with open("./data/codenames_words.txt", "r") as f:
             codenames_words = f.read().splitlines()
         return codenames_words
     
+    def lematize_word(self, word):
+        return self.lemmatizer.lemmatize(word)
+
     def generate_board(self):
         words = random.sample(self.codenames_words, self.row * self.col)
+        self.word_list = words
         self.blue_team = random.sample(words, 9)
         self.red_team = random.sample([word for word in words if word not in self.blue_team], 8)
         self.assassin = random.sample([word for word in words if word not in self.blue_team and word not in self.red_team], 1)
@@ -115,10 +123,16 @@ class Codenames:
 
 
 
-    def import_model(self):
+    def import_model(self, model):
         #import the tuned model
-        self.model = gensim.models.KeyedVectors.load_word2vec_format('codenames.bin', binary=True)
-    
+        if model == "bert":
+            self.model_name = 'bert-base-uncased'
+            self.tokenizer = BertTokenizer.from_pretrained(self.model_name)
+            self.model = BertForNextSentencePrediction.from_pretrained(self.model_name)
+        elif model == "word2vec":
+            self.model_name = 'word2vec'
+            self.model = gensim.models.KeyedVectors.load_word2vec_format('GoogleNews-vectors-negative300.bin', binary=True)
+
     def print_board_colored(self):
         #ascii seperator, align words, color words to their team color
 
@@ -238,10 +252,33 @@ class Codenames:
         self.turn = "blue" if self.turn == "red" else "red"
 
 
-            
-        
-        
+    def find_similars(self, words):
+        if self.model_name == 'word2vec':
+            hints = self.model.most_similar(
+            positive=words,
+            topn=1,
+            restrict_vocab=100000,
+            )     
+        elif self.model_name == 'bert-base-uncased':
+            # Tokenize the input group of words
+            tokenized = self.tokenizer.encode_plus(
+                words,
+                add_special_tokens=True,
+                return_tensors='pt'
+            )
 
+            # Generate predictions using the pre-trained BERT model
+            with torch.no_grad():
+                outputs = self.model(**tokenized)
+                predictions = outputs.logits
+
+            # Get the index of the most related word
+            related_word_index = torch.argmax(predictions, dim=1).item()
+
+            # Decode the related word from its index
+            hints = self.tokenizer.decode(related_word_index)
+        return hints
+    
     def find_hint(self):
         #try to find a hint that is similar to the words on the board, do it in pairs of 2, 3, 4 words, choose the one with the highest average similarity
         #create all possible combinations of 2, 3, 4 words
@@ -254,46 +291,37 @@ class Codenames:
         negativelist = [word.replace(" ", "_") for word in negativelist]
         possible_words = []
         scores = {}
+
         for i in range(2, 5):
             possible_words.extend(list(itertools.combinations(wordlist, i)))
 
         for words in tqdm.tqdm(possible_words):
+            break_outer = False
             words = [word for word in words]
             words = [word.lower() for word in words]
             words = [word.replace(" ", "_") for word in words]
             #drop words that are in the solved list
             #drop words that are in the negative list
-            hints = self.model.most_similar(
-                positive=words,
-                topn=1,
-                restrict_vocab=100000,
-            )
-            for word in self.board:
-                if hints[0][0] in word:
-                    continue
-            if hints[0][0].upper() in self.board:
-                continue
-            #check similarity pair
-        
+            hints = self.find_similars(words)
+            lematized_hint = self.lematize_word(hints[0][0]).lower()
             for word in words:
-                
                 score = self.model.similarity(word, hints[0][0])
-                if score < 0.3 or score > 0.8:
-                    #logging.log(f"Score too low {word} {hints[0][0]}: {score}")
-                    continue
+                print(word,hints[0][0] ,score, words)
+                if (lematized_hint in word) or (score < 0.1) or (word in lematized_hint):
+                    break_outer = True
+                    break
+            if break_outer:
+                continue
                 
-
             scores[hints[0][0]] = [hints[0][1], len(words), words]
         sorted_scores = sorted(scores.items(), key=lambda x: x[1][0], reverse=True)
+        print(len(sorted_scores))
         return sorted_scores[0][0], sorted_scores[0][1][1]
     
     def play_with_hint(self):
         hint, num = self.find_hint()
         print(f"Hint: {hint} {num}")
         self.guess_word(hint, num)
-
-        
-                
 
     def play(self):
         self.generate_board()
@@ -308,9 +336,9 @@ class Codenames:
 
 
 if __name__ == "__main__":
-    codenames = Codenames()
+    codenames = Codenames(model_name="bert")
     #codenames.tune_model()
-    codenames.create_dataset()
+    codenames.play()
         
         
 

@@ -1,0 +1,7 @@
+________________________
+['NET', 'MINT', 'HOLLYWOOD', 'SUB', 'AMBULANCE']
+['CHICK', 'BLOCK', 'PLATE', 'COTTON', 'HAM']
+['TOWER', 'JACK', 'SEAL', 'MAMMOTH', 'SCALE']
+['POINT', 'STOCK', 'PLASTIC', 'SPRING', 'CHARGE']
+['CASINO', 'WEB', 'POLICE', 'POISON', 'LAP']
+________________________
